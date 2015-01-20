@@ -1,4 +1,4 @@
-;(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 module.exports = function (Http, $http) {
   Http.prototype._request = function (options, callback) {
     options.data = options.data || options.form;
@@ -160,7 +160,7 @@ Endpoint.prototype.getEndpoint = function (path, id) {
   return this.options._endpoints[pathKey];
 };
 
-},{"./entity":5,"./helpers/defaults":6,"./http":7,"extend":11,"url-join":12}],5:[function(require,module,exports){
+},{"./entity":5,"./helpers/defaults":6,"./http":7,"extend":11,"url-join":13}],5:[function(require,module,exports){
 var Http = require('./http');
 var urljoin = require('url-join');
 var defaults = require('./helpers/defaults');
@@ -243,7 +243,7 @@ Entity.prototype.getEndpoint = function (path, id) {
   return this.options._endpoints[pathKey];
 };
 
-},{"./helpers/defaults":6,"./http":7,"./narrator":8,"extend":11,"url-join":12}],6:[function(require,module,exports){
+},{"./helpers/defaults":6,"./http":7,"./narrator":8,"extend":11,"url-join":13}],6:[function(require,module,exports){
 module.exports = function(options, defaults) {
   options = options || {};
 
@@ -256,7 +256,8 @@ module.exports = function(options, defaults) {
   return options;
 };
 },{}],7:[function(require,module,exports){
-var process=require("__browserify_process");var extend = require('extend');
+(function (process){
+var extend = require('extend');
 var defaults = require('./helpers/defaults');
 var request = require('request');
 var Promise = require('promise');
@@ -378,10 +379,12 @@ Http.prototype.request = function (path, method, options, callback) {
     });
   });
 };
-},{"./helpers/defaults":6,"__browserify_process":10,"extend":11,"promise":9,"request":9}],8:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"./helpers/defaults":6,"_process":10,"extend":11,"promise":9,"request":9}],8:[function(require,module,exports){
 var extend = require('extend');
 var urljoin = require('url-join');
 var Promise = require('promise');
+var Emitter = require('tiny-emitter');
 
 var Narrator = module.exports = function (options) {
   options = options || {};
@@ -389,7 +392,7 @@ var Narrator = module.exports = function (options) {
   this._endpoints = {};
   this.host = '/';
   
-  extend(this, options);
+  extend(this, new Emitter(), options);
   
   // FIXME: This is a hacky to expose some features
   var http = this.endpoint('').http;
@@ -433,134 +436,140 @@ Narrator.prototype.xhr = function (key, value) {
   this._xhr[key] = value;
   return this;
 };
-},{"./endpoint":4,"./http":7,"extend":11,"promise":9,"url-join":12}],9:[function(require,module,exports){
+},{"./endpoint":4,"./http":7,"extend":11,"promise":9,"tiny-emitter":12,"url-join":13}],9:[function(require,module,exports){
 
 },{}],10:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
+var queue = [];
+var draining = false;
 
-process.nextTick = (function () {
-    var canSetImmediate = typeof window !== 'undefined'
-    && window.setImmediate;
-    var canPost = typeof window !== 'undefined'
-    && window.postMessage && window.addEventListener
-    ;
-
-    if (canSetImmediate) {
-        return function (f) { return window.setImmediate(f) };
+function drainQueue() {
+    if (draining) {
+        return;
     }
-
-    if (canPost) {
-        var queue = [];
-        window.addEventListener('message', function (ev) {
-            var source = ev.source;
-            if ((source === window || source === null) && ev.data === 'process-tick') {
-                ev.stopPropagation();
-                if (queue.length > 0) {
-                    var fn = queue.shift();
-                    fn();
-                }
-            }
-        }, true);
-
-        return function nextTick(fn) {
-            queue.push(fn);
-            window.postMessage('process-tick', '*');
-        };
+    draining = true;
+    var currentQueue;
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        var i = -1;
+        while (++i < len) {
+            currentQueue[i]();
+        }
+        len = queue.length;
     }
-
-    return function nextTick(fn) {
-        setTimeout(fn, 0);
-    };
-})();
+    draining = false;
+}
+process.nextTick = function (fun) {
+    queue.push(fun);
+    if (!draining) {
+        setTimeout(drainQueue, 0);
+    }
+};
 
 process.title = 'browser';
 process.browser = true;
 process.env = {};
 process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
 
 process.binding = function (name) {
     throw new Error('process.binding is not supported');
-}
+};
 
 // TODO(shtylman)
 process.cwd = function () { return '/' };
 process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
+process.umask = function() { return 0; };
 
 },{}],11:[function(require,module,exports){
 var hasOwn = Object.prototype.hasOwnProperty;
 var toString = Object.prototype.toString;
+var undefined;
 
-function isPlainObject(obj) {
-	if (!obj || toString.call(obj) !== '[object Object]' || obj.nodeType || obj.setInterval)
+var isPlainObject = function isPlainObject(obj) {
+	'use strict';
+	if (!obj || toString.call(obj) !== '[object Object]') {
 		return false;
+	}
 
 	var has_own_constructor = hasOwn.call(obj, 'constructor');
-	var has_is_property_of_method = hasOwn.call(obj.constructor.prototype, 'isPrototypeOf');
+	var has_is_property_of_method = obj.constructor && obj.constructor.prototype && hasOwn.call(obj.constructor.prototype, 'isPrototypeOf');
 	// Not own constructor property must be Object
-	if (obj.constructor && !has_own_constructor && !has_is_property_of_method)
+	if (obj.constructor && !has_own_constructor && !has_is_property_of_method) {
 		return false;
+	}
 
 	// Own properties are enumerated firstly, so to speed up,
 	// if last one is own, then all properties are own.
 	var key;
-	for ( key in obj ) {}
+	for (key in obj) {}
 
-	return key === undefined || hasOwn.call( obj, key );
+	return key === undefined || hasOwn.call(obj, key);
 };
 
 module.exports = function extend() {
+	'use strict';
 	var options, name, src, copy, copyIsArray, clone,
-	    target = arguments[0] || {},
-	    i = 1,
-	    length = arguments.length,
-	    deep = false;
+		target = arguments[0],
+		i = 1,
+		length = arguments.length,
+		deep = false;
 
 	// Handle a deep copy situation
-	if ( typeof target === "boolean" ) {
+	if (typeof target === 'boolean') {
 		deep = target;
 		target = arguments[1] || {};
 		// skip the boolean and the target
 		i = 2;
-	}
-
-	// Handle case when target is a string or something (possible in deep copy)
-	if ( typeof target !== "object" && typeof target !== "function") {
+	} else if ((typeof target !== 'object' && typeof target !== 'function') || target == null) {
 		target = {};
 	}
 
-	for ( ; i < length; i++ ) {
+	for (; i < length; ++i) {
+		options = arguments[i];
 		// Only deal with non-null/undefined values
-		if ( (options = arguments[ i ]) != null ) {
+		if (options != null) {
 			// Extend the base object
-			for ( name in options ) {
-				src = target[ name ];
-				copy = options[ name ];
+			for (name in options) {
+				src = target[name];
+				copy = options[name];
 
 				// Prevent never-ending loop
-				if ( target === copy ) {
+				if (target === copy) {
 					continue;
 				}
 
 				// Recurse if we're merging plain objects or arrays
-				if ( deep && copy && ( isPlainObject(copy) || (copyIsArray = Array.isArray(copy)) ) ) {
-					if ( copyIsArray ) {
+				if (deep && copy && (isPlainObject(copy) || (copyIsArray = Array.isArray(copy)))) {
+					if (copyIsArray) {
 						copyIsArray = false;
 						clone = src && Array.isArray(src) ? src : [];
-
 					} else {
 						clone = src && isPlainObject(src) ? src : {};
 					}
 
 					// Never move original objects, clone them
-					target[ name ] = extend( deep, clone, copy );
+					target[name] = extend(deep, clone, copy);
 
 				// Don't bring in undefined values
-				} else if ( copy !== undefined ) {
-					target[ name ] = copy;
+				} else if (copy !== undefined) {
+					target[name] = copy;
 				}
 			}
 		}
@@ -570,7 +579,74 @@ module.exports = function extend() {
 	return target;
 };
 
+
 },{}],12:[function(require,module,exports){
+function E () {
+	// Keep this empty so it's easier to inherit from
+  // (via https://github.com/lipsmack from https://github.com/scottcorgan/tiny-emitter/issues/3)
+}
+
+E.prototype = {
+	on: function (name, callback, ctx) {
+    var e = this.e || (this.e = {});
+    
+    (e[name] || (e[name] = [])).push({
+      fn: callback,
+      ctx: ctx
+    });
+    
+    return this;
+  },
+
+  once: function (name, callback, ctx) {
+    var self = this;
+    var fn = function () {
+      self.off(name, fn);
+      callback.apply(ctx, arguments);
+    };
+    
+    return this.on(name, fn, ctx);
+  },
+
+  emit: function (name) {
+    var data = [].slice.call(arguments, 1);
+    var evtArr = ((this.e || (this.e = {}))[name] || []).slice();
+    var i = 0;
+    var len = evtArr.length;
+    
+    for (i; i < len; i++) {
+      evtArr[i].fn.apply(evtArr[i].ctx, data);
+    }
+    
+    return this;
+  },
+
+  off: function (name, callback) {
+    var e = this.e || (this.e = {});
+    var evts = e[name];
+    var liveEvents = [];
+    
+    if (evts && callback) {
+      for (var i = 0, len = evts.length; i < len; i++) {
+        if (evts[i].fn !== callback) liveEvents.push(evts[i]);
+      }
+    }
+    
+    // Remove event from queue to prevent memory leak
+    // Suggested by https://github.com/lazd
+    // Ref: https://github.com/scottcorgan/tiny-emitter/commit/c6ebfaa9bc973b33d110a84a307742b7cf94c953#commitcomment-5024910
+
+    (liveEvents.length) 
+      ? e[name] = liveEvents
+      : delete e[name];
+    
+    return this;
+  }
+};
+
+module.exports = E;
+
+},{}],13:[function(require,module,exports){
 function normalize (str) {
   return str
           .replace(/[\/]+/g, '/')
@@ -583,5 +659,4 @@ module.exports = function () {
   var joined = [].slice.call(arguments, 0).join('/');
   return normalize(joined);
 };
-},{}]},{},[3])
-;
+},{}]},{},[3]);

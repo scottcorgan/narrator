@@ -1,4 +1,4 @@
-;(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 var request = require('reqwest');
 var extend = require('extend');
 
@@ -21,7 +21,7 @@ module.exports = function (options, callback) {
   
   return request(options);
 };
-},{"extend":8,"reqwest":12}],2:[function(require,module,exports){
+},{"extend":8,"reqwest":15}],2:[function(require,module,exports){
 var defaults = require('./helpers/defaults');
 var extend = require('extend');
 var urljoin = require('url-join');
@@ -114,7 +114,7 @@ Endpoint.prototype.getEndpoint = function (path, id) {
   return this.options._endpoints[pathKey];
 };
 
-},{"./entity":3,"./helpers/defaults":4,"./http":5,"extend":8,"url-join":13}],3:[function(require,module,exports){
+},{"./entity":3,"./helpers/defaults":4,"./http":5,"extend":8,"url-join":17}],3:[function(require,module,exports){
 var Http = require('./http');
 var urljoin = require('url-join');
 var defaults = require('./helpers/defaults');
@@ -197,7 +197,7 @@ Entity.prototype.getEndpoint = function (path, id) {
   return this.options._endpoints[pathKey];
 };
 
-},{"./helpers/defaults":4,"./http":5,"./narrator":6,"extend":8,"url-join":13}],4:[function(require,module,exports){
+},{"./helpers/defaults":4,"./http":5,"./narrator":6,"extend":8,"url-join":17}],4:[function(require,module,exports){
 module.exports = function(options, defaults) {
   options = options || {};
 
@@ -210,7 +210,8 @@ module.exports = function(options, defaults) {
   return options;
 };
 },{}],5:[function(require,module,exports){
-var process=require("__browserify_process");var extend = require('extend');
+(function (process){
+var extend = require('extend');
 var defaults = require('./helpers/defaults');
 var request = require('request');
 var Promise = require('promise');
@@ -332,10 +333,12 @@ Http.prototype.request = function (path, method, options, callback) {
     });
   });
 };
-},{"./helpers/defaults":4,"__browserify_process":7,"extend":8,"promise":10,"request":1}],6:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"./helpers/defaults":4,"_process":7,"extend":8,"promise":9,"request":1}],6:[function(require,module,exports){
 var extend = require('extend');
 var urljoin = require('url-join');
 var Promise = require('promise');
+var Emitter = require('tiny-emitter');
 
 var Narrator = module.exports = function (options) {
   options = options || {};
@@ -343,7 +346,7 @@ var Narrator = module.exports = function (options) {
   this._endpoints = {};
   this.host = '/';
   
-  extend(this, options);
+  extend(this, new Emitter(), options);
   
   // FIXME: This is a hacky to expose some features
   var http = this.endpoint('').http;
@@ -387,132 +390,138 @@ Narrator.prototype.xhr = function (key, value) {
   this._xhr[key] = value;
   return this;
 };
-},{"./endpoint":2,"./http":5,"extend":8,"promise":10,"url-join":13}],7:[function(require,module,exports){
+},{"./endpoint":2,"./http":5,"extend":8,"promise":9,"tiny-emitter":16,"url-join":17}],7:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
+var queue = [];
+var draining = false;
 
-process.nextTick = (function () {
-    var canSetImmediate = typeof window !== 'undefined'
-    && window.setImmediate;
-    var canPost = typeof window !== 'undefined'
-    && window.postMessage && window.addEventListener
-    ;
-
-    if (canSetImmediate) {
-        return function (f) { return window.setImmediate(f) };
+function drainQueue() {
+    if (draining) {
+        return;
     }
-
-    if (canPost) {
-        var queue = [];
-        window.addEventListener('message', function (ev) {
-            var source = ev.source;
-            if ((source === window || source === null) && ev.data === 'process-tick') {
-                ev.stopPropagation();
-                if (queue.length > 0) {
-                    var fn = queue.shift();
-                    fn();
-                }
-            }
-        }, true);
-
-        return function nextTick(fn) {
-            queue.push(fn);
-            window.postMessage('process-tick', '*');
-        };
+    draining = true;
+    var currentQueue;
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        var i = -1;
+        while (++i < len) {
+            currentQueue[i]();
+        }
+        len = queue.length;
     }
-
-    return function nextTick(fn) {
-        setTimeout(fn, 0);
-    };
-})();
+    draining = false;
+}
+process.nextTick = function (fun) {
+    queue.push(fun);
+    if (!draining) {
+        setTimeout(drainQueue, 0);
+    }
+};
 
 process.title = 'browser';
 process.browser = true;
 process.env = {};
 process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
 
 process.binding = function (name) {
     throw new Error('process.binding is not supported');
-}
+};
 
 // TODO(shtylman)
 process.cwd = function () { return '/' };
 process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
+process.umask = function() { return 0; };
 
 },{}],8:[function(require,module,exports){
 var hasOwn = Object.prototype.hasOwnProperty;
 var toString = Object.prototype.toString;
+var undefined;
 
-function isPlainObject(obj) {
-	if (!obj || toString.call(obj) !== '[object Object]' || obj.nodeType || obj.setInterval)
+var isPlainObject = function isPlainObject(obj) {
+	'use strict';
+	if (!obj || toString.call(obj) !== '[object Object]') {
 		return false;
+	}
 
 	var has_own_constructor = hasOwn.call(obj, 'constructor');
-	var has_is_property_of_method = hasOwn.call(obj.constructor.prototype, 'isPrototypeOf');
+	var has_is_property_of_method = obj.constructor && obj.constructor.prototype && hasOwn.call(obj.constructor.prototype, 'isPrototypeOf');
 	// Not own constructor property must be Object
-	if (obj.constructor && !has_own_constructor && !has_is_property_of_method)
+	if (obj.constructor && !has_own_constructor && !has_is_property_of_method) {
 		return false;
+	}
 
 	// Own properties are enumerated firstly, so to speed up,
 	// if last one is own, then all properties are own.
 	var key;
-	for ( key in obj ) {}
+	for (key in obj) {}
 
-	return key === undefined || hasOwn.call( obj, key );
+	return key === undefined || hasOwn.call(obj, key);
 };
 
 module.exports = function extend() {
+	'use strict';
 	var options, name, src, copy, copyIsArray, clone,
-	    target = arguments[0] || {},
-	    i = 1,
-	    length = arguments.length,
-	    deep = false;
+		target = arguments[0],
+		i = 1,
+		length = arguments.length,
+		deep = false;
 
 	// Handle a deep copy situation
-	if ( typeof target === "boolean" ) {
+	if (typeof target === 'boolean') {
 		deep = target;
 		target = arguments[1] || {};
 		// skip the boolean and the target
 		i = 2;
-	}
-
-	// Handle case when target is a string or something (possible in deep copy)
-	if ( typeof target !== "object" && typeof target !== "function") {
+	} else if ((typeof target !== 'object' && typeof target !== 'function') || target == null) {
 		target = {};
 	}
 
-	for ( ; i < length; i++ ) {
+	for (; i < length; ++i) {
+		options = arguments[i];
 		// Only deal with non-null/undefined values
-		if ( (options = arguments[ i ]) != null ) {
+		if (options != null) {
 			// Extend the base object
-			for ( name in options ) {
-				src = target[ name ];
-				copy = options[ name ];
+			for (name in options) {
+				src = target[name];
+				copy = options[name];
 
 				// Prevent never-ending loop
-				if ( target === copy ) {
+				if (target === copy) {
 					continue;
 				}
 
 				// Recurse if we're merging plain objects or arrays
-				if ( deep && copy && ( isPlainObject(copy) || (copyIsArray = Array.isArray(copy)) ) ) {
-					if ( copyIsArray ) {
+				if (deep && copy && (isPlainObject(copy) || (copyIsArray = Array.isArray(copy)))) {
+					if (copyIsArray) {
 						copyIsArray = false;
 						clone = src && Array.isArray(src) ? src : [];
-
 					} else {
 						clone = src && isPlainObject(src) ? src : {};
 					}
 
 					// Never move original objects, clone them
-					target[ name ] = extend( deep, clone, copy );
+					target[name] = extend(deep, clone, copy);
 
 				// Don't bring in undefined values
-				} else if ( copy !== undefined ) {
-					target[ name ] = copy;
+				} else if (copy !== undefined) {
+					target[name] = copy;
 				}
 			}
 		}
@@ -522,23 +531,30 @@ module.exports = function extend() {
 	return target;
 };
 
+
 },{}],9:[function(require,module,exports){
-'use strict'
+'use strict';
 
-var nextTick = require('./lib/next-tick')
+module.exports = require('./lib/core.js')
+require('./lib/done.js')
+require('./lib/es6-extensions.js')
+require('./lib/node-extensions.js')
+},{"./lib/core.js":10,"./lib/done.js":11,"./lib/es6-extensions.js":12,"./lib/node-extensions.js":13}],10:[function(require,module,exports){
+'use strict';
 
-module.exports = Promise
+var asap = require('asap')
+
+module.exports = Promise;
 function Promise(fn) {
-  if (!(this instanceof Promise)) return new Promise(fn)
+  if (typeof this !== 'object') throw new TypeError('Promises must be constructed via new')
   if (typeof fn !== 'function') throw new TypeError('not a function')
   var state = null
-  var delegating = false
   var value = null
   var deferreds = []
   var self = this
 
   this.then = function(onFulfilled, onRejected) {
-    return new Promise(function(resolve, reject) {
+    return new self.constructor(function(resolve, reject) {
       handle(new Handler(onFulfilled, onRejected, resolve, reject))
     })
   }
@@ -548,7 +564,7 @@ function Promise(fn) {
       deferreds.push(deferred)
       return
     }
-    nextTick(function() {
+    asap(function() {
       var cb = state ? deferred.onFulfilled : deferred.onRejected
       if (cb === null) {
         (state ? deferred.resolve : deferred.reject)(value)
@@ -567,39 +583,22 @@ function Promise(fn) {
   }
 
   function resolve(newValue) {
-    if (delegating)
-      return
-    resolve_(newValue)
-  }
-
-  function resolve_(newValue) {
-    if (state !== null)
-      return
     try { //Promise Resolution Procedure: https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
       if (newValue === self) throw new TypeError('A promise cannot be resolved with itself.')
       if (newValue && (typeof newValue === 'object' || typeof newValue === 'function')) {
         var then = newValue.then
         if (typeof then === 'function') {
-          delegating = true
-          then.call(newValue, resolve_, reject_)
+          doResolve(then.bind(newValue), resolve, reject)
           return
         }
       }
       state = true
       value = newValue
       finale()
-    } catch (e) { reject_(e) }
+    } catch (e) { reject(e) }
   }
 
   function reject(newValue) {
-    if (delegating)
-      return
-    reject_(newValue)
-  }
-
-  function reject_(newValue) {
-    if (state !== null)
-      return
     state = false
     value = newValue
     finale()
@@ -611,8 +610,7 @@ function Promise(fn) {
     deferreds = null
   }
 
-  try { fn(resolve, reject) }
-  catch(e) { reject(e) }
+  doResolve(fn, resolve, reject)
 }
 
 
@@ -623,55 +621,109 @@ function Handler(onFulfilled, onRejected, resolve, reject){
   this.reject = reject
 }
 
-},{"./lib/next-tick":11}],10:[function(require,module,exports){
-'use strict'
+/**
+ * Take a potentially misbehaving resolver function and make sure
+ * onFulfilled and onRejected are only called once.
+ *
+ * Makes no guarantees about asynchrony.
+ */
+function doResolve(fn, onFulfilled, onRejected) {
+  var done = false;
+  try {
+    fn(function (value) {
+      if (done) return
+      done = true
+      onFulfilled(value)
+    }, function (reason) {
+      if (done) return
+      done = true
+      onRejected(reason)
+    })
+  } catch (ex) {
+    if (done) return
+    done = true
+    onRejected(ex)
+  }
+}
 
-//This file contains then/promise specific extensions to the core promise API
+},{"asap":14}],11:[function(require,module,exports){
+'use strict';
 
 var Promise = require('./core.js')
-var nextTick = require('./lib/next-tick')
+var asap = require('asap')
+
+module.exports = Promise
+Promise.prototype.done = function (onFulfilled, onRejected) {
+  var self = arguments.length ? this.then.apply(this, arguments) : this
+  self.then(null, function (err) {
+    asap(function () {
+      throw err
+    })
+  })
+}
+},{"./core.js":10,"asap":14}],12:[function(require,module,exports){
+'use strict';
+
+//This file contains the ES6 extensions to the core Promises/A+ API
+
+var Promise = require('./core.js')
+var asap = require('asap')
 
 module.exports = Promise
 
 /* Static Functions */
 
-Promise.from = function (value) {
-  if (value instanceof Promise) return value
-  return new Promise(function (resolve) { resolve(value) })
-}
-Promise.denodeify = function (fn) {
-  return function () {
-    var self = this
-    var args = Array.prototype.slice.call(arguments)
+function ValuePromise(value) {
+  this.then = function (onFulfilled) {
+    if (typeof onFulfilled !== 'function') return this
     return new Promise(function (resolve, reject) {
-      args.push(function (err, res) {
-        if (err) reject(err)
-        else resolve(res)
+      asap(function () {
+        try {
+          resolve(onFulfilled(value))
+        } catch (ex) {
+          reject(ex);
+        }
       })
-      fn.apply(self, args)
     })
   }
 }
-Promise.nodeify = function (fn) {
-  return function () {
-    var args = Array.prototype.slice.call(arguments)
-    var callback = typeof args[args.length - 1] === 'function' ? args.pop() : null
+ValuePromise.prototype = Promise.prototype
+
+var TRUE = new ValuePromise(true)
+var FALSE = new ValuePromise(false)
+var NULL = new ValuePromise(null)
+var UNDEFINED = new ValuePromise(undefined)
+var ZERO = new ValuePromise(0)
+var EMPTYSTRING = new ValuePromise('')
+
+Promise.resolve = function (value) {
+  if (value instanceof Promise) return value
+
+  if (value === null) return NULL
+  if (value === undefined) return UNDEFINED
+  if (value === true) return TRUE
+  if (value === false) return FALSE
+  if (value === 0) return ZERO
+  if (value === '') return EMPTYSTRING
+
+  if (typeof value === 'object' || typeof value === 'function') {
     try {
-      return fn.apply(this, arguments).nodeify(callback)
-    } catch (ex) {
-      if (callback == null) {
-        return new Promise(function (resolve, reject) { reject(ex) })
-      } else {
-        nextTick(function () {
-          callback(ex)
-        })
+      var then = value.then
+      if (typeof then === 'function') {
+        return new Promise(then.bind(value))
       }
+    } catch (ex) {
+      return new Promise(function (resolve, reject) {
+        reject(ex)
+      })
     }
   }
+
+  return new ValuePromise(value)
 }
 
-Promise.all = function () {
-  var args = Array.prototype.slice.call(arguments.length === 1 && Array.isArray(arguments[0]) ? arguments[0] : arguments)
+Promise.all = function (arr) {
+  var args = Array.prototype.slice.call(arr)
 
   return new Promise(function (resolve, reject) {
     if (args.length === 0) return resolve([])
@@ -699,44 +751,212 @@ Promise.all = function () {
   })
 }
 
+Promise.reject = function (value) {
+  return new Promise(function (resolve, reject) { 
+    reject(value);
+  });
+}
+
+Promise.race = function (values) {
+  return new Promise(function (resolve, reject) { 
+    values.forEach(function(value){
+      Promise.resolve(value).then(resolve, reject);
+    })
+  });
+}
+
 /* Prototype Methods */
 
-Promise.prototype.done = function (onFulfilled, onRejected) {
-  var self = arguments.length ? this.then.apply(this, arguments) : this
-  self.then(null, function (err) {
-    nextTick(function () {
-      throw err
-    })
-  })
+Promise.prototype['catch'] = function (onRejected) {
+  return this.then(null, onRejected);
 }
-Promise.prototype.nodeify = function (callback) {
-  if (callback == null) return this
+
+},{"./core.js":10,"asap":14}],13:[function(require,module,exports){
+'use strict';
+
+//This file contains then/promise specific extensions that are only useful for node.js interop
+
+var Promise = require('./core.js')
+var asap = require('asap')
+
+module.exports = Promise
+
+/* Static Functions */
+
+Promise.denodeify = function (fn, argumentCount) {
+  argumentCount = argumentCount || Infinity
+  return function () {
+    var self = this
+    var args = Array.prototype.slice.call(arguments)
+    return new Promise(function (resolve, reject) {
+      while (args.length && args.length > argumentCount) {
+        args.pop()
+      }
+      args.push(function (err, res) {
+        if (err) reject(err)
+        else resolve(res)
+      })
+      var res = fn.apply(self, args)
+      if (res && (typeof res === 'object' || typeof res === 'function') && typeof res.then === 'function') {
+        resolve(res)
+      }
+    })
+  }
+}
+Promise.nodeify = function (fn) {
+  return function () {
+    var args = Array.prototype.slice.call(arguments)
+    var callback = typeof args[args.length - 1] === 'function' ? args.pop() : null
+    var ctx = this
+    try {
+      return fn.apply(this, arguments).nodeify(callback, ctx)
+    } catch (ex) {
+      if (callback === null || typeof callback == 'undefined') {
+        return new Promise(function (resolve, reject) { reject(ex) })
+      } else {
+        asap(function () {
+          callback.call(ctx, ex)
+        })
+      }
+    }
+  }
+}
+
+Promise.prototype.nodeify = function (callback, ctx) {
+  if (typeof callback != 'function') return this
 
   this.then(function (value) {
-    nextTick(function () {
-      callback(null, value)
+    asap(function () {
+      callback.call(ctx, null, value)
     })
   }, function (err) {
-    nextTick(function () {
-      callback(err)
+    asap(function () {
+      callback.call(ctx, err)
     })
   })
 }
-},{"./core.js":9,"./lib/next-tick":11}],11:[function(require,module,exports){
-var process=require("__browserify_process");'use strict'
 
-if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
-  module.exports = function(fn){ setImmediate(fn) }
-} else if (typeof process !== 'undefined' && process && typeof process.nextTick === 'function') { // node.js before 0.10
-  module.exports = function(fn){ process.nextTick(fn) }
-} else {
-  module.exports = function(fn){ setTimeout(fn, 0) }
+},{"./core.js":10,"asap":14}],14:[function(require,module,exports){
+(function (process){
+
+// Use the fastest possible means to execute a task in a future turn
+// of the event loop.
+
+// linked list of tasks (single, with head node)
+var head = {task: void 0, next: null};
+var tail = head;
+var flushing = false;
+var requestFlush = void 0;
+var isNodeJS = false;
+
+function flush() {
+    /* jshint loopfunc: true */
+
+    while (head.next) {
+        head = head.next;
+        var task = head.task;
+        head.task = void 0;
+        var domain = head.domain;
+
+        if (domain) {
+            head.domain = void 0;
+            domain.enter();
+        }
+
+        try {
+            task();
+
+        } catch (e) {
+            if (isNodeJS) {
+                // In node, uncaught exceptions are considered fatal errors.
+                // Re-throw them synchronously to interrupt flushing!
+
+                // Ensure continuation if the uncaught exception is suppressed
+                // listening "uncaughtException" events (as domains does).
+                // Continue in next event to avoid tick recursion.
+                if (domain) {
+                    domain.exit();
+                }
+                setTimeout(flush, 0);
+                if (domain) {
+                    domain.enter();
+                }
+
+                throw e;
+
+            } else {
+                // In browsers, uncaught exceptions are not fatal.
+                // Re-throw them asynchronously to avoid slow-downs.
+                setTimeout(function() {
+                   throw e;
+                }, 0);
+            }
+        }
+
+        if (domain) {
+            domain.exit();
+        }
+    }
+
+    flushing = false;
 }
 
-},{"__browserify_process":7}],12:[function(require,module,exports){
-/*! version: 0.9.7
+if (typeof process !== "undefined" && process.nextTick) {
+    // Node.js before 0.9. Note that some fake-Node environments, like the
+    // Mocha test runner, introduce a `process` global without a `nextTick`.
+    isNodeJS = true;
+
+    requestFlush = function () {
+        process.nextTick(flush);
+    };
+
+} else if (typeof setImmediate === "function") {
+    // In IE10, Node.js 0.9+, or https://github.com/NobleJS/setImmediate
+    if (typeof window !== "undefined") {
+        requestFlush = setImmediate.bind(window, flush);
+    } else {
+        requestFlush = function () {
+            setImmediate(flush);
+        };
+    }
+
+} else if (typeof MessageChannel !== "undefined") {
+    // modern browsers
+    // http://www.nonblocking.io/2011/06/windownexttick.html
+    var channel = new MessageChannel();
+    channel.port1.onmessage = flush;
+    requestFlush = function () {
+        channel.port2.postMessage(0);
+    };
+
+} else {
+    // old browsers
+    requestFlush = function () {
+        setTimeout(flush, 0);
+    };
+}
+
+function asap(task) {
+    tail = tail.next = {
+        task: task,
+        domain: isNodeJS && process.domain,
+        next: null
+    };
+
+    if (!flushing) {
+        flushing = true;
+        requestFlush();
+    }
+};
+
+module.exports = asap;
+
+
+}).call(this,require('_process'))
+},{"_process":7}],15:[function(require,module,exports){
+/*!
   * Reqwest! A general purpose XHR connection manager
-  * license MIT (c) Dustin Diaz 2013
+  * license MIT (c) Dustin Diaz 2014
   * https://github.com/ded/reqwest
   */
 
@@ -748,7 +968,9 @@ if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
 
   var win = window
     , doc = document
-    , twoHundo = /^(20\d|1223)$/
+    , httpsRe = /^http/
+    , protocolRe = /(^\w+):\/\//
+    , twoHundo = /^(20\d|1223)$/ //http://stackoverflow.com/questions/10046972/msie-returns-status-code-of-1223-for-ajax-request
     , byTag = 'getElementsByTagName'
     , readyState = 'readyState'
     , contentType = 'Content-Type'
@@ -803,15 +1025,21 @@ if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
         }
       }
 
+  function succeed(r) {
+    var protocol = protocolRe.exec(r.url);
+    protocol = (protocol && protocol[1]) || window.location.protocol;
+    return httpsRe.test(protocol) ? twoHundo.test(r.request.status) : !!r.request.response;
+  }
+
   function handleReadyState(r, success, error) {
     return function () {
       // use _aborted to mitigate against IE err c00c023f
       // (can't read props on aborted request objects)
       if (r._aborted) return error(r.request)
+      if (r._timedOut) return error(r.request, 'Request is aborted: timeout')
       if (r.request && r.request[readyState] == 4) {
         r.request.onreadystatechange = noop
-        if (twoHundo.test(r.request.status))
-          success(r.request)
+        if (succeed(r)) success(r.request)
         else
           error(r.request)
       }
@@ -826,9 +1054,10 @@ if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
       || defaultHeaders['accept'][o['type']]
       || defaultHeaders['accept']['*']
 
+    var isAFormData = typeof FormData === 'function' && (o['data'] instanceof FormData);
     // breaks cross-origin requests with legacy browsers
     if (!o['crossOrigin'] && !headers[requestedWith]) headers[requestedWith] = defaultHeaders['requestedWith']
-    if (!headers[contentType]) headers[contentType] = o['contentType'] || defaultHeaders['contentType']
+    if (!headers[contentType] && !isAFormData) headers[contentType] = o['contentType'] || defaultHeaders['contentType']
     for (h in headers)
       headers.hasOwnProperty(h) && 'setRequestHeader' in http && http.setRequestHeader(h, headers[h])
   }
@@ -851,7 +1080,6 @@ if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
     var reqId = uniqid++
       , cbkey = o['jsonpCallback'] || 'callback' // the 'callback' key
       , cbval = o['jsonpCallbackName'] || reqwest.getcallbackPrefix(reqId)
-      // , cbval = o['jsonpCallbackName'] || ('reqwest_' + reqId) // the 'callback' value
       , cbreg = new RegExp('((^|\\?|&)' + cbkey + ')=([^&]+)')
       , match = url.match(cbreg)
       , script = doc.createElement('script')
@@ -877,9 +1105,6 @@ if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
       // need this for IE due to out-of-order onreadystatechange(), binding script
       // execution to an event listener gives us control over when the script
       // is executed. See http://jaubourg.net/2010/07/loading-script-as-onclick-handler-of.html
-      //
-      // if this hack is used in IE10 jsonp callback are never called
-      script.event = 'onclick'
       script.htmlFor = script.id = '_reqwest_' + reqId
     }
 
@@ -966,9 +1191,12 @@ if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
     init.apply(this, arguments)
   }
 
-  function setType(url) {
-    var m = url.match(/\.(json|jsonp|html|xml)(\?|$)/)
-    return m ? m[1] : 'js'
+  function setType(header) {
+    // json, javascript, text/plain, text/html, xml
+    if (header.match('json')) return 'json'
+    if (header.match('javascript')) return 'js'
+    if (header.match('text')) return 'html'
+    if (header.match('xml')) return 'xml'
   }
 
   function init(o, fn) {
@@ -990,13 +1218,12 @@ if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
     this._responseArgs = {}
 
     var self = this
-      , type = o['type'] || setType(this.url)
 
     fn = fn || function () {}
 
     if (o['timeout']) {
       this.timeout = setTimeout(function () {
-        self.abort()
+        timedOut()
       }, o['timeout'])
     }
 
@@ -1027,6 +1254,7 @@ if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
     }
 
     function success (resp) {
+      var type = o['type'] || resp && setType(resp.getResponseHeader('Content-Type')) // resp can be undefined in IE
       resp = (type !== 'jsonp') ? self.request : resp
       // use global data filter on response text
       var filteredResponse = globalSetupOptions.dataFilter(resp.responseText, type)
@@ -1071,6 +1299,11 @@ if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
       }
 
       complete(resp)
+    }
+
+    function timedOut() {
+      self._timedOut = true
+      self.request.abort()      
     }
 
     function error(resp, msg, t) {
@@ -1142,6 +1375,9 @@ if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
         this._errorHandlers.push(fn)
       }
       return this
+    }
+  , 'catch': function (fn) {
+      return this.fail(fn)
     }
   }
 
@@ -1334,7 +1570,73 @@ if (typeof setImmediate === 'function') { // IE >= 10 & node.js >= 0.10
   return reqwest
 });
 
-},{}],13:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
+function E () {
+	// Keep this empty so it's easier to inherit from
+  // (via https://github.com/lipsmack from https://github.com/scottcorgan/tiny-emitter/issues/3)
+}
+
+E.prototype = {
+	on: function (name, callback, ctx) {
+    var e = this.e || (this.e = {});
+    
+    (e[name] || (e[name] = [])).push({
+      fn: callback,
+      ctx: ctx
+    });
+    
+    return this;
+  },
+
+  once: function (name, callback, ctx) {
+    var self = this;
+    var fn = function () {
+      self.off(name, fn);
+      callback.apply(ctx, arguments);
+    };
+    
+    return this.on(name, fn, ctx);
+  },
+
+  emit: function (name) {
+    var data = [].slice.call(arguments, 1);
+    var evtArr = ((this.e || (this.e = {}))[name] || []).slice();
+    var i = 0;
+    var len = evtArr.length;
+    
+    for (i; i < len; i++) {
+      evtArr[i].fn.apply(evtArr[i].ctx, data);
+    }
+    
+    return this;
+  },
+
+  off: function (name, callback) {
+    var e = this.e || (this.e = {});
+    var evts = e[name];
+    var liveEvents = [];
+    
+    if (evts && callback) {
+      for (var i = 0, len = evts.length; i < len; i++) {
+        if (evts[i].fn !== callback) liveEvents.push(evts[i]);
+      }
+    }
+    
+    // Remove event from queue to prevent memory leak
+    // Suggested by https://github.com/lazd
+    // Ref: https://github.com/scottcorgan/tiny-emitter/commit/c6ebfaa9bc973b33d110a84a307742b7cf94c953#commitcomment-5024910
+
+    (liveEvents.length) 
+      ? e[name] = liveEvents
+      : delete e[name];
+    
+    return this;
+  }
+};
+
+module.exports = E;
+
+},{}],17:[function(require,module,exports){
 function normalize (str) {
   return str
           .replace(/[\/]+/g, '/')
@@ -1347,5 +1649,4 @@ module.exports = function () {
   var joined = [].slice.call(arguments, 0).join('/');
   return normalize(joined);
 };
-},{}]},{},[6])
-;
+},{}]},{},[6]);
