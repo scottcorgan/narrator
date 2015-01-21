@@ -335,11 +335,26 @@ Http.prototype._http = function (path, method, options, callback) {
   return this._promiseWrap(function (resolve, reject) {
     self._request(requestOptions, function (err, response, body) {
       var responseBody = self._parseJSON(body);
+      var api;
+      
+      // Access to api
+      if (self.options.context && self.options.context.options.api) {
+        api = self.options.context.options.api;
+      }
+      
+      if (api) {
+        api.emit('request', {
+          error: err,
+          response: response
+        });
+      }
       
       if (err) {
+        api.emit('request:error', err)
         reject(err);
       }
       else{
+        api.emit('request:success', response);
         resolve(responseBody);
       }
       
