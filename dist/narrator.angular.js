@@ -343,18 +343,18 @@ Http.prototype._http = function (path, method, options, callback) {
       }
       
       if (api) {
-        api.emit('request', {
+        api.emit('response', {
           error: err,
           response: response
         });
       }
       
       if (err) {
-        api.emit('request:error', err)
+        api.emit('response:error', err)
         reject(err);
       }
       else{
-        api.emit('request:success', response);
+        api.emit('response:success', response);
         resolve(responseBody);
       }
       

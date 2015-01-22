@@ -1,6 +1,6 @@
 {
   "name": "narrator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Construct wrappers around api RESTful endpoints",
   "main": "lib/narrator.js",
   "scripts": {
