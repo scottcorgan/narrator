@@ -349,7 +349,7 @@ Http.prototype._http = function (path, method, options, callback) {
         });
       }
       
-      if (err) {
+      if (err || response.statusCode >= 400) {
         api.emit('response:error', err)
         reject(err);
       }
