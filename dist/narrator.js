@@ -304,7 +304,7 @@ Http.prototype._http = function (path, method, options, callback) {
       }
       
       if (err || response.statusCode >= 400) {
-        api.emit('response:error', err)
+        api.emit('response:error', err || response)
         reject(err);
       }
       else{
